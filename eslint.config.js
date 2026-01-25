@@ -19,7 +19,7 @@ module.exports = [
       'no-undef': 'error',
       'no-console': 'off', // Usually 'off' in Node so you can see logs
       eqeqeq: ['error', 'always'], // Use === instead of ==
-      curly: 'error', // Force {} for if/else blocks
+      //curly: 'error', // Force {} for if/else blocks
 
       // --- Node.js & Async specific ---
       'no-process-exit': 'error', // Prevent sudden app crashes
@@ -29,7 +29,7 @@ module.exports = [
 
       // --- Formatting/Style (to keep code clean) ---
       semi: ['error', 'always'], // Enforce semicolons
-      indent: ['error', 2], // 2-space indentation
+      // indent: ['error', 2], // 2-space indentation
       'comma-dangle': ['error', 'always-multiline'], // Better for git diffs
       'arrow-spacing': ['error', { before: true, after: true }],
       'no-multi-spaces': 'error',
