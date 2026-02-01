@@ -13,15 +13,16 @@ const {
   update,
   remove,
 } = require("../controllers/categories.controller");
+const { userAuth, systemAuth } = require("../middlewares/auth");
 
 const categoriesRouter = express.Router();
 
-categoriesRouter.get("/", getCategoriesValidator, get);
+categoriesRouter.get("/", userAuth, getCategoriesValidator, get);
 
-categoriesRouter.post("/", createCategoryValidator, insert);
+categoriesRouter.post("/", systemAuth, createCategoryValidator, insert);
 
-categoriesRouter.put("/:id", updateCategoryValidator, update);
+categoriesRouter.put("/:id", systemAuth, updateCategoryValidator, update);
 
-categoriesRouter.delete("/:id", deleteCategoryValidator, remove);
+categoriesRouter.delete("/:id", systemAuth, deleteCategoryValidator, remove);
 
 module.exports = categoriesRouter;

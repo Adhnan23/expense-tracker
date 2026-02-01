@@ -1,61 +1,105 @@
-const Transaction = require("../models/transaction.model");
+const Transaction = require("../models/Transaction");
+const mongoose = require("mongoose");
 
-const getAllTransactionsByUser = async (req, res) => {
-  const type = req.query.type;
-  const userId = req.user.id;
-  let transactions;
-  if (type) {
-    transactions = await Transaction.find({ userId, type });
+/* -------------------------------- HELPERS -------------------------------- */
+
+const buildMatch = ({ userId, type, category, startDate, endDate }) => {
+  const match = { userId: new mongoose.Types.ObjectId(userId) };
+
+  if (type) match.type = type;
+  if (category) match.category = new mongoose.Types.ObjectId(category);
+
+  if (startDate || endDate) {
+    match.date = {};
+    if (startDate) match.date.$gte = startDate;
+    if (endDate) match.date.$lte = endDate;
   }
-  if (!type) {
-    transactions = await Transaction.find({ userId });
-  }
+
+  return match;
+};
+
+const aggregateTotals = async (match) => {
+  return Transaction.aggregate([
+    { $match: match },
+    {
+      $group: {
+        _id: "$type",
+        total: { $sum: "$amount" },
+      },
+    },
+  ]);
+};
+
+const normalizeTotals = (data) => {
+  let income = 0;
+  let expense = 0;
+
+  data.forEach((item) => {
+    if (item._id === "income") income = item.total;
+    if (item._id === "expense") expense = item.total;
+  });
+
+  return {
+    totalIncome: income,
+    totalExpense: expense,
+    balance: income - expense,
+  };
+};
+
+/* ----------------------------- CRUD CONTROLLERS ---------------------------- */
+
+exports.getAllTransactionsByUser = async (req, res) => {
+  const { type } = req.query;
+
+  const query = { userId: req.user.id };
+  if (type) query.type = type;
+
+  const transactions = await Transaction.find(query)
+    .populate("category", "name type")
+    .sort({ date: -1 });
 
   res.status(200).json({
     success: true,
-    message: "Transactions retrieved successfully",
+    count: transactions.length,
     transactions,
   });
 };
 
-const createTransaction = async (req, res) => {
-  const userId = req.user.id;
-  const transactionData = req.body;
-  transactionData.userId = userId;
-  const newTransaction = await Transaction.create(transactionData);
-  if (!newTransaction) {
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to create transaction" });
-  }
+exports.createTransaction = async (req, res) => {
+  const transaction = await Transaction.create({
+    ...req.body,
+    userId: req.user.id,
+  });
+
   res.status(201).json({
     success: true,
     message: "Transaction created successfully",
-    transaction: newTransaction,
+    transaction,
   });
 };
 
-const updateTransaction = async (req, res) => {
-  const transactionId = req.params.id;
-  const transaction = await Transaction.findById(transactionId);
+exports.updateTransaction = async (req, res) => {
+  const transaction = await Transaction.findById(req.params.id);
+
   if (!transaction) {
-    return res
-      .status(404)
-      .json({ success: false, message: "Transaction not found" });
+    return res.status(404).json({
+      success: false,
+      message: "Transaction not found",
+    });
   }
 
-  const transactionData = req.body;
+  if (transaction.userId.toString() !== req.user.id) {
+    return res.status(403).json({
+      success: false,
+      message: "You are not allowed to update this transaction",
+    });
+  }
+
   const updatedTransaction = await Transaction.findByIdAndUpdate(
-    transactionId,
-    transactionData,
+    req.params.id,
+    req.body,
     { new: true },
   );
-
-  if (!updatedTransaction) {
-    return res
-      .status(500)
-      .json({ success: false, message: "Transaction failed to update" });
-  }
 
   res.status(200).json({
     success: true,
@@ -64,19 +108,24 @@ const updateTransaction = async (req, res) => {
   });
 };
 
-const deleteTransaction = async (req, res) => {
-  const transactionId = req.params.id;
-  const transaction = await Transaction.findById(transactionId);
+exports.deleteTransaction = async (req, res) => {
+  const transaction = await Transaction.findById(req.params.id);
+
   if (!transaction) {
-    return res
-      .status(404)
-      .json({ success: false, message: "Transaction not found" });
+    return res.status(404).json({
+      success: false,
+      message: "Transaction not found",
+    });
   }
-  const deletedTransaction = await Transaction.findByIdAndDelete(transactionId);
-  if (!deletedTransaction)
-    return res
-      .status(500)
-      .json({ success: false, message: "Transaction failed to delete" });
+
+  if (transaction.userId.toString() !== req.user.id) {
+    return res.status(403).json({
+      success: false,
+      message: "You are not allowed to delete this transaction",
+    });
+  }
+
+  await Transaction.findByIdAndDelete(req.params.id);
 
   res.status(200).json({
     success: true,
@@ -84,147 +133,60 @@ const deleteTransaction = async (req, res) => {
   });
 };
 
-const calculateSumByUser = async (req, res) => {
-  const userId = req.user.id;
-  const { type, category } = req.query;
-  const transactions = await Transaction.find({ userId });
+/* --------------------------- AGGREGATION CONTROLLERS ----------------------- */
 
-  if (!transactions || transactions.length === 0) {
-    return res.status(200).json({
-      success: true,
-      message: "No transactions found",
-      total: 0,
-    });
-  }
+exports.calculateSumByUser = async (req, res) => {
+  const match = buildMatch({
+    userId: req.user.id,
+    type: req.query.type,
+    category: req.query.category,
+  });
 
-  let filteredTransactions = transactions;
-  if (type)
-    filteredTransactions = filteredTransactions.filter((t) => t.type === type);
-  if (category)
-    filteredTransactions = filteredTransactions.filter(
-      (t) => t.category === category,
-    );
+  const totals = await aggregateTotals(match);
 
-  if (!type && !category) {
-    const totalIncome = transactions
-      .filter((t) => t.type === "income")
-      .reduce((sum, t) => sum + t.amount, 0);
-    const totalExpense = transactions
-      .filter((t) => t.type === "expense")
-      .reduce((sum, t) => sum + t.amount, 0);
-    return res.status(200).json({
-      success: true,
-      message: "Total income and expense calculated successfully",
-      totalIncome,
-      totalExpense,
-      total: totalIncome - totalExpense,
-    });
-  }
-
-  const total = filteredTransactions.reduce((sum, t) => sum + t.amount, 0);
   res.status(200).json({
     success: true,
-    message: "Total calculated successfully",
-    total,
+    ...normalizeTotals(totals),
   });
 };
 
-const calculateSumByYear = async (req, res) => {
-  const userId = req.user.id;
-  const { year } = req.params;
-  const { type, category } = req.query;
-  const transactions = await Transaction.find({ userId });
+exports.calculateSumByYear = async (req, res) => {
+  const year = Number(req.params.year);
 
-  if (!transactions || transactions.length === 0) {
-    return res.status(200).json({
-      success: true,
-      message: "No transactions found",
-      total: 0,
-    });
-  }
-
-  let filteredTransactions = transactions.filter((t) => {
-    const transactionYear = new Date(t.date).getFullYear();
-    return transactionYear === parseInt(year);
+  const match = buildMatch({
+    userId: req.user.id,
+    type: req.query.type,
+    category: req.query.category,
+    startDate: new Date(year, 0, 1),
+    endDate: new Date(year, 11, 31, 23, 59, 59),
   });
 
-  if (type)
-    filteredTransactions = filteredTransactions.filter((t) => t.type === type);
-  if (category)
-    filteredTransactions = filteredTransactions.filter(
-      (t) => t.category === category,
-    );
-  if (!type && !category) {
-    const totalIncome = filteredTransactions
-      .filter((t) => t.type === "income")
-      .reduce((sum, t) => sum + t.amount, 0);
-    const totalExpense = filteredTransactions
-      .filter((t) => t.type === "expense")
-      .reduce((sum, t) => sum + t.amount, 0);
-    return res.status(200).json({
-      success: true,
-      message: "Total income and expense calculated successfully",
-      totalIncome,
-      totalExpense,
-      total: totalIncome - totalExpense,
-    });
-  }
-  const total = filteredTransactions.reduce((sum, t) => sum + t.amount, 0);
+  const totals = await aggregateTotals(match);
+
   res.status(200).json({
     success: true,
-    message: `Total for year ${year} calculated successfully`,
-    total,
+    year,
+    ...normalizeTotals(totals),
   });
 };
 
-const calculateSumByMonth = async (req, res) => {
-  const userId = req.user.id;
+exports.calculateSumByMonth = async (req, res) => {
   const { year, month } = req.params;
-  const { type, category } = req.query;
-  const transactions = await Transaction.find({ userId });
 
-  if (!transactions || transactions.length === 0) {
-    return res.status(200).json({
-      success: true,
-      message: "No transactions found",
-      total: 0,
-    });
-  }
-
-  let filteredTransactions = transactions.filter((t) => {
-    const date = new Date(t.date);
-    const transactionYear = date.getFullYear();
-    const transactionMonth = date.getMonth() + 1;
-    return (
-      transactionYear === parseInt(year) && transactionMonth === parseInt(month)
-    );
+  const match = buildMatch({
+    userId: req.user.id,
+    type: req.query.type,
+    category: req.query.category,
+    startDate: new Date(year, month - 1, 1),
+    endDate: new Date(year, month, 0, 23, 59, 59),
   });
 
-  if (type)
-    filteredTransactions = filteredTransactions.filter((t) => t.type === type);
-  if (category)
-    filteredTransactions = filteredTransactions.filter(
-      (t) => t.category === category,
-    );
-  if (!type && !category) {
-    const totalIncome = filteredTransactions
-      .filter((t) => t.type === "income")
-      .reduce((sum, t) => sum + t.amount, 0);
-    const totalExpense = filteredTransactions
-      .filter((t) => t.type === "expense")
-      .reduce((sum, t) => sum + t.amount, 0);
-    return res.status(200).json({
-      success: true,
-      message: "Total income and expense calculated successfully",
-      totalIncome,
-      totalExpense,
-      total: totalIncome - totalExpense,
-    });
-  }
-  const total = filteredTransactions.reduce((sum, t) => sum + t.amount, 0);
+  const totals = await aggregateTotals(match);
+
   res.status(200).json({
     success: true,
-    message: `Total for ${month}/${year} calculated successfully`,
-    total,
+    year,
+    month,
+    ...normalizeTotals(totals),
   });
 };
