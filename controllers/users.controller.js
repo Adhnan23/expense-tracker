@@ -1,5 +1,5 @@
 const User = require("../models/User");
-const {hashPassword, verifyPassword} = require("../utils/hashPassword");
+const { hashPassword, verifyPassword } = require("../utils/hashPassword");
 const { signJwt } = require("../utils/jwt");
 
 const register = async (req, res) => {
@@ -12,10 +12,10 @@ const register = async (req, res) => {
   }
   const hashedPassword = await hashPassword(user.password);
   user.password = hashedPassword;
-  const newUser = User.create(user);
+  User.create(user);
   res
     .status(201)
-    .json({ success: true, message: "User registered successfully", user: newUser });
+    .json({ success: true, message: "User registered successfully" });
 };
 
 const login = async (req, res) => {
@@ -33,9 +33,7 @@ const login = async (req, res) => {
       .json({ success: false, message: "Invalid email or password" });
   }
   const token = signJwt({ id: user.id });
-  res
-    .status(200)
-    .json({ success: true, message: "Login successful", token });
+  res.status(200).json({ success: true, message: "Login successful", token });
 };
 
 module.exports = { register, login };

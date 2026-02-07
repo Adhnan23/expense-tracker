@@ -1,3 +1,4 @@
+const Category = require("../models/Category");
 const Transaction = require("../models/Transaction");
 const mongoose = require("mongoose");
 
@@ -66,6 +67,24 @@ exports.getAllTransactionsByUser = async (req, res) => {
 };
 
 exports.createTransaction = async (req, res) => {
+  const { category, type } = req.body;
+
+  const categoryDoc = await Category.findById(category);
+
+  if (!categoryDoc) {
+    return res.status(400).json({
+      success: false,
+      message: "Category not found",
+    });
+  }
+
+  if (type !== categoryDoc.type) {
+    return res.status(400).json({
+      success: false,
+      message: "Type and Category Mismatch",
+    });
+  }
+
   const transaction = await Transaction.create({
     ...req.body,
     userId: req.user.id,
@@ -93,6 +112,26 @@ exports.updateTransaction = async (req, res) => {
       success: false,
       message: "You are not allowed to update this transaction",
     });
+  }
+
+  const newType = req.body.type ?? transaction.type;
+  const newCategory = req.body.category ?? transaction.category;
+
+  if (req.body.type || req.body.category) {
+    const categoryDoc = await Category.findById(newCategory);
+    if (!categoryDoc) {
+      return res.status(400).json({
+        success: false,
+        message: "Category not found",
+      });
+    }
+
+    if (categoryDoc.type !== newType) {
+      return res.status(400).json({
+        success: false,
+        message: "Type and Category mismatch",
+      });
+    }
   }
 
   const updatedTransaction = await Transaction.findByIdAndUpdate(
