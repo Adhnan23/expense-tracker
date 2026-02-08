@@ -66,6 +66,32 @@ exports.getAllTransactionsByUser = async (req, res) => {
   });
 };
 
+exports.getTransactionById = async (req, res) => {
+  const transaction = await Transaction.findById(req.params.id).populate(
+    "category",
+    "name type",
+  );
+
+  if (!transaction) {
+    return res.status(404).json({
+      success: false,
+      message: "Transaction not found",
+    });
+  }
+
+  if (transaction.userId.toString() !== req.user.id) {
+    return res.status(403).json({
+      success: false,
+      message: "You are not allowed to view this transaction",
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    transaction,
+  });
+};
+
 exports.createTransaction = async (req, res) => {
   const { category, type } = req.body;
 

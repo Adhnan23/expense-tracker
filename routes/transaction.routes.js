@@ -2,6 +2,7 @@ const express = require("express");
 
 const {
   getTransactionsValidator,
+  getTransactionByIdValidator,
   createTransactionValidator,
   updateTransactionValidator,
   deleteTransactionValidator,
@@ -18,6 +19,7 @@ const {
   calculateSumByUser,
   calculateSumByYear,
   calculateSumByMonth,
+  getTransactionById,
 } = require("../controllers/transaction.controller");
 
 const { userAuth } = require("../middlewares/auth");
@@ -32,6 +34,13 @@ transactionsRouter.get(
   getTransactionsValidator,
   getAllTransactionsByUser,
 );
+
+// transactionsRouter.get(
+//   "/:id",
+//   userAuth,
+//   getTransactionByIdValidator,
+//   getTransactionById,
+// );
 
 transactionsRouter.post(
   "/",

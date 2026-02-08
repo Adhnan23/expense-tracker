@@ -16,6 +16,10 @@ const categoryQueryValidator = query("category")
 /* ----------------------------- CRUD VALIDATORS ----------------------------- */
 
 const getTransactionsValidator = [typeQueryValidator, validate()];
+const getTransactionByIdValidator = [
+  param("id").isMongoId().withMessage("Invalid transaction ID"),
+  validate(),
+];
 
 const createTransactionValidator = [
   body("type")
@@ -111,6 +115,7 @@ const calculateSumByMonthValidator = [
 
 module.exports = {
   getTransactionsValidator,
+  getTransactionByIdValidator,
   createTransactionValidator,
   updateTransactionValidator,
   deleteTransactionValidator,
