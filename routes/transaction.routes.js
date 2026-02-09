@@ -35,13 +35,6 @@ transactionsRouter.get(
   getAllTransactionsByUser,
 );
 
-// transactionsRouter.get(
-//   "/:id",
-//   userAuth,
-//   getTransactionByIdValidator,
-//   getTransactionById,
-// );
-
 transactionsRouter.post(
   "/",
   userAuth,
@@ -84,6 +77,13 @@ transactionsRouter.get(
   userAuth,
   calculateSumByMonthValidator,
   calculateSumByMonth,
+);
+
+transactionsRouter.get(
+  "/:id",
+  userAuth,
+  getTransactionByIdValidator,
+  getTransactionById,
 );
 
 module.exports = transactionsRouter;
